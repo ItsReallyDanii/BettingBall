@@ -40,37 +40,57 @@ def ingest_real_data(
     Returns:
         Report dict with valid_records, rejected_records, rejection_reason_histogram
     """
+    abs_input_dir = os.path.abspath(input_dir)
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(audit_dir, exist_ok=True)
+    
+    logger.info(f"Ingesting real data from: {abs_input_dir}")
     
     all_records = []
     rejected_rows = []
     sample_columns_detected = set()
     
     if not os.path.exists(input_dir):
-        logger.warning(f"Input directory {input_dir} does not exist.")
-        return _write_report(0, 0, [], set(), audit_dir, reason="input_dir_not_found")
+        logger.warning(f"Input directory {abs_input_dir} does not exist.")
+        return _write_report(0, 0, [], set(), audit_dir, reason="input_dir_not_found", inspected_path=abs_input_dir)
     
-    csv_files = [f for f in os.listdir(input_dir) if f.endswith(".csv")]
+    # Case-insensitive .csv detection
+    all_files = os.listdir(input_dir)
+    csv_files = [f for f in all_files if f.lower().endswith(".csv")]
+    
+    # Identify bootstrap files
+    bootstrap_files = [f for f in csv_files if "_example_" in f or "bootstrap" in f.lower()]
+    is_bootstrap_mode = len(bootstrap_files) > 0 and len(bootstrap_files) == len(csv_files)
+    data_mode = "bootstrap" if is_bootstrap_mode else "real"
     if not csv_files:
-        logger.warning(f"No CSV files found in {input_dir}")
-        return _write_report(0, 0, [], set(), audit_dir, reason="no_csv_files")
+        data_mode = "unknown"
+
+    logger.info(f"Discovered files ({len(csv_files)}/ {len(all_files)}): {csv_files}")
+    logger.info(f"Data Mode: {data_mode}")
+    
+    if not csv_files:
+        logger.warning(f"No CSV files found in {abs_input_dir}")
+        return _write_report(0, 0, [], set(), audit_dir, reason="no_csv_files", inspected_path=abs_input_dir, data_mode=data_mode)
     
     for filename in csv_files:
         path = os.path.join(input_dir, filename)
         logger.info(f"Processing {path}...")
+        is_this_file_bootstrap = "_example_" in filename or "bootstrap" in filename.lower()
         
         try:
             with open(path, "r", encoding="utf-8-sig") as f:
                 reader = csv.DictReader(f)
                 
-                # Detect columns from first row
+                # Detect columns from header
                 if reader.fieldnames:
                     sample_columns_detected.update(reader.fieldnames)
                 
                 for row_idx, row in enumerate(reader):
                     # Apply alias mapping
                     normalized_row = _apply_aliases(row)
+                    
+                    # Add bootstrap flag
+                    normalized_row["is_bootstrap"] = 1 if is_this_file_bootstrap else 0
                     
                     # Validate
                     valid, reason = _validate_row(normalized_row)
@@ -94,7 +114,7 @@ def ingest_real_data(
     
     # Check if no rows parsed
     if not all_records and not rejected_rows:
-        return _write_report(0, 0, [], sample_columns_detected, audit_dir, reason="no_rows_parsed")
+        return _write_report(0, 0, [], sample_columns_detected, audit_dir, reason="no_rows_parsed", inspected_path=abs_input_dir, data_mode=data_mode)
     
     # Sort by timestamp
     all_records.sort(key=lambda x: x["timestamp_utc"])
@@ -111,7 +131,9 @@ def ingest_real_data(
         output_path = None
     
     return _write_report(len(all_records), len(rejected_rows), rejected_rows, 
-                        sample_columns_detected, audit_dir, output_path)
+                        sample_columns_detected, audit_dir, output_path, 
+                        inspected_path=abs_input_dir, data_mode=data_mode,
+                        source_files=csv_files)
 
 def _apply_aliases(row: Dict[str, Any]) -> Dict[str, Any]:
     """Apply column alias mapping to normalize vendor variations."""
@@ -144,7 +166,9 @@ def _validate_row(row: Dict[str, Any]) -> Tuple[bool, str]:
     
     # Validate timestamp
     try:
-        _parse_timestamp(row["timestamp_utc"])
+        ts = _parse_timestamp(row["timestamp_utc"])
+        # Standardize timestamp to ISO string
+        row["timestamp_utc"] = ts.isoformat().replace("+00:00", "Z")
     except Exception as e:
         return False, f"invalid_timestamp:{str(e)}"
     
@@ -213,7 +237,10 @@ def _write_report(
     sample_columns: set,
     audit_dir: str, 
     output_path: Optional[str] = None,
-    reason: Optional[str] = None
+    reason: Optional[str] = None,
+    inspected_path: Optional[str] = None,
+    data_mode: str = "unknown",
+    source_files: List[str] = None
 ) -> Dict[str, Any]:
     """Write detailed ingest report with rejection histogram."""
     
@@ -225,7 +252,11 @@ def _write_report(
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "valid_records": n_valid,
         "rejected_records": n_rejected,
+        "data_mode": data_mode,
+        "source_files": source_files or [],
+        "bootstrap_generated": data_mode == "bootstrap",
         "output_path": output_path,
+        "inspected_path": inspected_path,
         "rejection_reason_histogram": reason_histogram,
         "sample_columns_detected": sorted(list(sample_columns)),
         "rejected_details": rejected_details[:100],  # Cap detail log
@@ -238,7 +269,7 @@ def _write_report(
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2)
     
-    logger.info(f"Ingest complete. Valid: {n_valid}, Rejected: {n_rejected}")
+    logger.info(f"Ingest complete. Valid: {n_valid}, Rejected: {n_rejected}, Mode: {data_mode}")
     if reason_histogram:
         logger.info(f"Top rejection reasons: {reason_histogram}")
     

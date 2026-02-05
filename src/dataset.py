@@ -4,7 +4,7 @@ Dataset builder with leak-safe temporal splits.
 import os
 import csv
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Tuple
 
 def build_dataset(
@@ -115,14 +115,17 @@ def temporal_split(
     train_ratio: float = 0.6,
     val_ratio: float = 0.2,
     test_ratio: float = 0.2,
-    timestamp_col: str = "timestamp_utc"
+    timestamp_col: str = "timestamp_utc",
+    audit_dir: str = "outputs/audits"
 ) -> Tuple[List[Dict], List[Dict], List[Dict]]:
     """
-    Leak-safe temporal split.
+    Leak-safe temporal split with split audit.
     
     Returns:
         (train, val, test) lists
     """
+    os.makedirs(audit_dir, exist_ok=True)
+    
     # Load dataset
     with open(dataset_path, "r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
@@ -138,14 +141,57 @@ def temporal_split(
     val = dataset[train_end:val_end]
     test = dataset[val_end:]
     
-    # Leakage guard
-    if train and test:
-        last_train_ts = train[-1][timestamp_col]
-        first_test_ts = test[0][timestamp_col]
-        
-        if last_train_ts >= first_test_ts:
-            raise ValueError(f"LEAKAGE DETECTED: last train timestamp {last_train_ts} >= first test timestamp {first_test_ts}")
+    # Audit logic
+    def _get_ids(data): return set(r.get("event_id", "") for r in data if r.get("event_id"))
+    def _get_hashes(data): 
+        import hashlib
+        hashes = set()
+        for r in data:
+            s = json.dumps(r, sort_keys=True)
+            hashes.add(hashlib.md5(s.encode()).hexdigest())
+        return hashes
+
+    train_ids = _get_ids(train)
+    val_ids = _get_ids(val)
+    test_ids = _get_ids(test)
     
+    train_hashes = _get_hashes(train)
+    val_hashes = _get_hashes(val)
+    test_hashes = _get_hashes(test)
+    
+    overlap_ids = (train_ids & val_ids) | (val_ids & test_ids) | (train_ids & test_ids)
+    overlap_hashes = (train_hashes & val_hashes) | (val_hashes & test_hashes) | (train_hashes & test_hashes)
+    
+    temporal_order_verified = True
+    if train and val:
+        if train[-1][timestamp_col] > val[0][timestamp_col]: temporal_order_verified = False
+    if val and test:
+        if val[-1][timestamp_col] > test[0][timestamp_col]: temporal_order_verified = False
+        
+    audit = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "temporal_order_verified": temporal_order_verified,
+        "duplicate_event_id_overlap_count": len(overlap_ids),
+        "near_duplicate_hash_overlap_count": len(overlap_hashes),
+        "split_sizes": {
+            "train": len(train),
+            "val": len(val),
+            "test": len(test)
+        }
+    }
+    
+    audit_path = os.path.join(audit_dir, "split_audit.json")
+    with open(audit_path, "w") as f:
+        json.dump(audit, f, indent=2)
+    
+    # Hard fail on overlap
+    if len(overlap_ids) > 0:
+        raise ValueError(f"LEAKAGE DETECTED: {len(overlap_ids)} event_id overlaps across splits")
+    if len(overlap_hashes) > 0:
+        raise ValueError(f"LEAKAGE DETECTED: {len(overlap_hashes)} near-duplicate hash overlaps")
+    if not temporal_order_verified:
+        raise ValueError("LEAKAGE DETECTED: Temporal order violated across splits")
+        
     return train, val, test
 
 def rolling_fold_generator(
