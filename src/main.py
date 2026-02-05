@@ -103,6 +103,22 @@ def run_readiness_check(profile: str = "freeze"):
     blockers.extend(compile_freeze_blockers(report_bt["gate_status"], report_bt["post_calibration"], thresholds))
     blockers.extend(compile_freeze_blockers(report_roll["gate_status"], rolling_metrics_for_gates, thresholds))
     
+    # Check data mode for freeze profile
+    data_mode = "synthetic"  # default assumption
+    if os.path.exists("outputs/audits/ingest_report.json"):
+        with open("outputs/audits/ingest_report.json", "r") as f:
+            ingest_report = json.load(f)
+            data_mode = ingest_report.get("data_mode", "synthetic")
+    
+    if profile == "freeze" and data_mode != "real":
+        blockers.append({
+            "id": "real_data_required_for_freeze",
+            "expected": "real",
+            "actual": data_mode,
+            "severity": "critical",
+            "action_hint": "Freeze profile requires real production data, not synthetic"
+        })
+    
     # Deduplicate blockers
     unique_blockers = {b["id"]: b for b in blockers}.values()
     

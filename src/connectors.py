@@ -40,7 +40,10 @@ class DataConnector:
         # If data doesn't exist, generate synthetic data
         if not success:
             print("⚠️ No data found in data/raw/. Generating synthetic data...")
-            success = self._generate_synthetic_data(1000)
+            success = self._generate_synthetic_data(100)
+            self.report["data_mode"] = "synthetic"
+        else:
+            self.report["data_mode"] = "real"
 
         with open("outputs/audits/ingest_report.json", "w") as f:
             json.dump(self.report, f, indent=2)
@@ -116,7 +119,7 @@ class DataConnector:
 
         return True
 
-    def _generate_synthetic_data(self, n):
+    def _generate_synthetic_data(self, n=400):
         with open("data/raw/teams.csv", "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=self.schemas["teams"])
             w.writeheader()
@@ -145,8 +148,23 @@ class DataConnector:
             self._validate_row("games", g_row)
             games.append(g_row)
             
+            # Create correlated signal for model to learn
+            # Player avg is 25.4 (from players dict below/above). 
+            # We vary threshold to create varying 'diff' feature.
+            thresh = 20.5 + (i % 10) # 20.5 to 29.5
+            proj = 25.4 + 0.5 # avg + slope
+            diff = proj - thresh
+            
+            # Target probability (Sigmoid-like relationship)
+            import math
+            prob = 1 / (1 + math.exp(-diff))
+            
+            # Deterministic outcome sampling
             h = int(hashlib.md5(gid.encode()).hexdigest(), 16)
-            t_row = {"game_id": gid, "player_id": "LBJ_01", "event_type": "player_points_over", "threshold": 24.5, "horizon": "pregame", "actual": 1 if (h % 100 < 65) else 0}
+            h_norm = (h % 10000) / 10000.0
+            actual = 1 if h_norm < prob else 0
+
+            t_row = {"game_id": gid, "player_id": "LBJ_01", "event_type": "player_points_over", "threshold": thresh, "horizon": "pregame", "actual": actual}
             self._validate_row("targets", t_row)
             targets.append(t_row)
 
