@@ -1,0 +1,28 @@
+{
+  "calibration_method": "Platt Scaling (LogReg on Logits)",
+  "features_used": [
+    "bias_term",
+    "stat_projection_diff (avg_5 + slope_5 - threshold)",
+    "days_rest",
+    "opponent_def_rating"
+  ],
+  "intended_use": "Baseline comparison for advanced models",
+  "known_limitations": [
+    "Linear decision boundary",
+    "Ignores injury reports",
+    "No player-specific embankments",
+    "Assuming stable opponent def rating"
+  ],
+  "last_eval_metrics": {
+    "mean_brier": 0.1392,
+    "mean_brier_pre": 0.1796,
+    "mean_ece": 0.0626,
+    "mean_ece_pre": 0.1795
+  },
+  "model_name": "Baseline Logistic Regression (SGD) + Platt Scaling",
+  "out_of_scope_use": "High-stakes betting without human review",
+  "preprocessing": "None (Raw features extracted on the fly)",
+  "training_window_policy": "Strict Chronological Split (No future leakage)",
+  "type": "binary_classification",
+  "version": "v1.10"
+}

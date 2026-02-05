@@ -1,0 +1,29 @@
+{
+  "artifacts_present": {
+    "data_card.json": true,
+    "freeze_blockers.json": true,
+    "model_card.json": true,
+    "readiness_report.json": true,
+    "repro_manifest.json": true
+  },
+  "blocker_count": 0,
+  "blockers": [],
+  "current_metrics": {
+    "mean_brier": 0.1392,
+    "mean_brier_pre": 0.1796,
+    "mean_ece": 0.0626,
+    "mean_ece_pre": 0.1795,
+    "total_sample_size": 400
+  },
+  "exit_code": 0,
+  "freeze_thresholds": {
+    "mean_brier": 0.2,
+    "mean_ece": 0.08,
+    "sample_size_total": 300
+  },
+  "gate_profile_used": "freeze",
+  "git_commit": "5a87260c2b6eb656beb93abb8f037702f6e515be",
+  "overall_verdict": "GO",
+  "release_tag": "v1.9.4-real-dataset-freeze-unblock",
+  "timestamp_utc": "2026-02-05T22:15:39.252290Z"
+}

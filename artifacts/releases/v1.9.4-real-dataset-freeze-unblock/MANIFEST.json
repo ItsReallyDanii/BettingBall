@@ -1,0 +1,32 @@
+{
+  "release_tag": "v1.9.4-real-dataset-freeze-unblock",
+  "git_commit": "5a87260c2b6eb656beb93abb8f037702f6e515be",
+  "utc_timestamp": "2026-02-05T22:20:36.958919Z",
+  "files": [
+    {
+      "filename": "readiness_report.json",
+      "sha256": "e0fe5b2a14e77190e4aa352b85cd30fc7b0d65ef61785d07666305f9e8161316",
+      "size_bytes": 770
+    },
+    {
+      "filename": "freeze_blockers.json",
+      "sha256": "14903548dfe02954a09e3fc3a96c667965eecc2b2e40757bbeeeee0669543404",
+      "size_bytes": 102
+    },
+    {
+      "filename": "model_card.json",
+      "sha256": "5324e500c914ca62bde2717d45e461f9d130725e713f2df8d76fddf3bf82904b",
+      "size_bytes": 937
+    },
+    {
+      "filename": "data_card.json",
+      "sha256": "ae4c4168247919c846f28863f17f0daefca620762d48f116c9fbd3c85bca1fbf",
+      "size_bytes": 372
+    },
+    {
+      "filename": "repro_manifest.json",
+      "sha256": "37181f9a60b680e7820edfd7c61f22c5a91a81c64b4e8e3fca82360256ebe5cc",
+      "size_bytes": 937
+    }
+  ]
+}

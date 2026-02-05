@@ -733,6 +733,7 @@ def main():
     parser.add_argument("--readiness", action="store_true", help="Run full production readiness suite")
     parser.add_argument("--readiness_profile", type=str, default="freeze", choices=["dev", "freeze"], help="Profile for readiness check")
     parser.add_argument("--profile", type=str, choices=["dev", "freeze"], help="Alias for gate_profile and readiness_profile")
+    parser.add_argument("--archive", action="store_true", help="Archive current audit artifacts for release")
     args = parser.parse_args()
 
     # Handle profile alias
@@ -747,6 +748,17 @@ def main():
             run_predictions(); sys.exit(0)
         if args.readiness:
             success = run_readiness_check(profile=args.readiness_profile)
+            sys.exit(0 if success else 1)
+        if args.archive:
+            from src.archive import archive_release
+            from src.readiness import _file_hash
+            # Get git commit from repro_manifest or fallback
+            commit = "unknown"
+            if os.path.exists("outputs/audits/repro_manifest.json"):
+                with open("outputs/audits/repro_manifest.json") as f:
+                    commit = json.load(f).get("git_commit", "unknown")
+            
+            success = archive_release(SETTINGS.release_tag, commit)
             sys.exit(0 if success else 1)
         if args.backtest:
             run_backtest_workflow(args.test_ratio, args.gate_profile)

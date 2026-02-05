@@ -1,0 +1,17 @@
+{
+  "dataset_name": "NBA Player Props (Rolling Window)",
+  "label_distribution": {
+    "over": 246,
+    "pos_rate": 0.615,
+    "under": 154
+  },
+  "schema_validation": "Passed (Strict Pydantic Enforcement)",
+  "sources": [
+    "balldontlie.io (via DataConnector)"
+  ],
+  "temporal_coverage": {
+    "max": null,
+    "min": null
+  },
+  "total_samples": 400
+}
