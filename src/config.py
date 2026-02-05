@@ -19,7 +19,7 @@ class Settings:
     max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "800"))
     dry_run: bool = os.getenv("DRY_RUN", "true").lower() == "true"
     api_key: str = os.getenv("LLM_API_KEY", "")
-    release_tag: str = "v1.9.1-gate-profiles-and-reporting"
+    release_tag: str = "v1.9.4-real-dataset-freeze-unblock"
     
     # Data Connectors
     bdl_api_key: str = os.getenv("BDL_API_KEY", "")

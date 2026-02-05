@@ -732,7 +732,13 @@ def main():
     parser.add_argument("--gate_profile", type=str, default="dev", choices=["dev", "freeze"])
     parser.add_argument("--readiness", action="store_true", help="Run full production readiness suite")
     parser.add_argument("--readiness_profile", type=str, default="freeze", choices=["dev", "freeze"], help="Profile for readiness check")
+    parser.add_argument("--profile", type=str, choices=["dev", "freeze"], help="Alias for gate_profile and readiness_profile")
     args = parser.parse_args()
+
+    # Handle profile alias
+    if args.profile:
+        args.gate_profile = args.profile
+        args.readiness_profile = args.profile
 
     try:
         if args.run: iterative_runner(); sys.exit(0)
