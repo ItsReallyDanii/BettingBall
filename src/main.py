@@ -685,6 +685,7 @@ def main():
     try:
         if args.run: iterative_runner(); sys.exit(0)
         if args.csv:
+            DataConnector().ingest()
             run_predictions(); sys.exit(0)
         if args.readiness:
             success = run_readiness_check(profile=args.readiness_profile)
