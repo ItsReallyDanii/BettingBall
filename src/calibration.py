@@ -46,3 +46,52 @@ class PlattScaler:
         logit = math.log(p_safe / (1 - p_safe))
         z = self.a * logit + self.b
         return 1.0 / (1.0 + math.exp(-max(min(z, 10), -10)))
+
+class IsotonicScaler:
+    """Simple binned isotonic regression (monotonic bin averages)."""
+    def __init__(self, n_bins: int = 10):
+        self.n_bins = n_bins
+        self.bin_values = [0.5] * n_bins
+
+    def fit(self, probs: List[float], outcomes: List[int]):
+        if not probs: return
+        
+        bins = [[] for _ in range(self.n_bins)]
+        for p, y in zip(probs, outcomes):
+            idx = min(int(p * self.n_bins), self.n_bins - 1)
+            bins[idx].append(y)
+            
+        # Compute bin averages
+        averages = []
+        for b in bins:
+            if b:
+                averages.append(sum(b) / len(b))
+            else:
+                averages.append(None)
+                
+        # Interpolate missing bins
+        last_val = 0.0
+        for i in range(self.n_bins):
+            if averages[i] is None:
+                # Find next available
+                next_val = None
+                for j in range(i + 1, self.n_bins):
+                    if averages[j] is not None:
+                        next_val = averages[j]
+                        break
+                if next_val is not None:
+                    averages[i] = (last_val + next_val) / 2
+                else:
+                    averages[i] = last_val
+            last_val = averages[i]
+            
+        # Force monotonicity
+        for i in range(1, self.n_bins):
+            if averages[i] < averages[i-1]:
+                averages[i] = averages[i-1]
+                
+        self.bin_values = averages
+
+    def predict(self, prob: float) -> float:
+        idx = min(int(prob * self.n_bins), self.n_bins - 1)
+        return self.bin_values[idx]

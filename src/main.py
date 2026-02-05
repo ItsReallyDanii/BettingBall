@@ -743,6 +743,7 @@ def main():
     parser.add_argument("--train_profile", type=str, default="dev", choices=["dev", "train", "freeze"], help="Profile for training gates")
     parser.add_argument("--model_dir", type=str, default="outputs/models", help="Directory for model artifacts")
     parser.add_argument("--force_retrain", action="store_true", help="Force retraining even if model exists")
+    parser.add_argument("--ingest_real", action="store_true", help="Ingest real historical data from data/real")
     args = parser.parse_args()
 
     # Handle profile alias
@@ -784,6 +785,17 @@ def main():
             except Exception as e:
                 print(f"❌ ERROR: {e}")
                 sys.exit(1)
+        if args.ingest_real:
+            from src.real_data_loader import ingest_real_data
+            try:
+                report = ingest_real_data()
+                print(f"✅ Real data ingest complete: {report['valid_records']} valid records")
+                if report['rejected_records'] > 0:
+                    print(f"⚠️ Warning: {report['rejected_records']} records rejected. See outputs/audits/real_data_ingest_report.json")
+                sys.exit(0)
+            except Exception as e:
+                print(f"❌ ERROR: {e}")
+                sys.exit(1)
         if args.build_dataset:
             from src.dataset import build_dataset
             try:
@@ -798,9 +810,13 @@ def main():
             from src.dataset import temporal_split
             from src.train import train_model
             try:
-                dataset_path = "outputs/training/dataset.csv"
+                # Decide dataset source
+                dataset_path = "outputs/training/real_dataset.csv"
                 if not os.path.exists(dataset_path):
-                    print("❌ ERROR: Dataset not found. Run --build_dataset first.")
+                    dataset_path = "outputs/training/dataset.csv"
+                
+                if not os.path.exists(dataset_path):
+                    print(f"❌ ERROR: Dataset not found at {dataset_path}. Run --build_dataset or --ingest_real first.")
                     sys.exit(1)
                 
                 # Check if model exists and force_retrain not set
@@ -810,6 +826,7 @@ def main():
                     print("   Use --force_retrain to overwrite")
                     sys.exit(0)
                 
+                print(f"🚀 Training model using {dataset_path}...")
                 train_data, val_data, test_data = temporal_split(dataset_path)
                 metadata = train_model(train_data, val_data, output_dir=args.model_dir)
                 
@@ -826,7 +843,12 @@ def main():
         if args.evaluate_train:
             from src.evaluate_v2 import evaluate_train_profile
             try:
-                report = evaluate_train_profile(model_dir=args.model_dir)
+                # Decide dataset source
+                dataset_path = "outputs/training/real_dataset.csv"
+                if not os.path.exists(dataset_path):
+                    dataset_path = "outputs/training/dataset.csv"
+                
+                report = evaluate_train_profile(dataset_path=dataset_path, model_dir=args.model_dir)
                 print(f"\n{'='*50}")
                 print(f"VERDICT: {report['verdict']}")
                 print(f"{'='*50}")
