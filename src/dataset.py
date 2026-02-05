@@ -124,7 +124,7 @@ def temporal_split(
         (train, val, test) lists
     """
     # Load dataset
-    with open(dataset_path, "r", encoding="utf-8") as f:
+    with open(dataset_path, "r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         dataset = list(reader)
     
@@ -160,7 +160,7 @@ def rolling_fold_generator(
     Yields:
         (fold_idx, train, val) tuples
     """
-    with open(dataset_path, "r", encoding="utf-8") as f:
+    with open(dataset_path, "r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         dataset = list(reader)
     

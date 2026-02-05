@@ -789,12 +789,39 @@ def main():
             from src.real_data_loader import ingest_real_data
             try:
                 report = ingest_real_data()
+                
+                # Hard fail on zero valid records
+                if report['valid_records'] == 0:
+                    print(f"❌ INGEST FAILED: No valid records parsed")
+                    
+                    if report.get('failure_reason'):
+                        print(f"   Reason: {report['failure_reason']}")
+                    
+                    # Print rejection histogram
+                    histogram = report.get('rejection_reason_histogram', {})
+                    if histogram:
+                        print(f"\n📊 Top 5 Rejection Reasons:")
+                        for reason, count in list(histogram.items())[:5]:
+                            print(f"   {reason}: {count}")
+                    
+                    # Print detected columns for debugging
+                    detected = report.get('sample_columns_detected', [])
+                    if detected:
+                        print(f"\n🔍 Columns detected in source: {', '.join(detected[:10])}")
+                    
+                    sys.exit(1)
+                
                 print(f"✅ Real data ingest complete: {report['valid_records']} valid records")
                 if report['rejected_records'] > 0:
-                    print(f"⚠️ Warning: {report['rejected_records']} records rejected. See outputs/audits/real_data_ingest_report.json")
+                    print(f"⚠️  Warning: {report['rejected_records']} records rejected")
+                    histogram = report.get('rejection_reason_histogram', {})
+                    if histogram:
+                        print(f"   Top reasons: {dict(list(histogram.items())[:3])}")
                 sys.exit(0)
             except Exception as e:
                 print(f"❌ ERROR: {e}")
+                import traceback
+                traceback.print_exc()
                 sys.exit(1)
         if args.build_dataset:
             from src.dataset import build_dataset
@@ -819,6 +846,25 @@ def main():
                     print(f"❌ ERROR: Dataset not found at {dataset_path}. Run --build_dataset or --ingest_real first.")
                     sys.exit(1)
                 
+                # Verify dataset has rows
+                import csv as csv_module
+                with open(dataset_path, "r", encoding="utf-8-sig") as f:
+                    reader = csv_module.DictReader(f)
+                    row_count = sum(1 for _ in reader)
+                
+                if row_count == 0:
+                    print(f"❌ BLOCKER: real_dataset_empty")
+                    print(f"   Dataset {dataset_path} has 0 rows")
+                    print(f"   Run --ingest_real with valid data files")
+                    sys.exit(1)
+                
+                # Check minimum samples for profile
+                min_samples = {"dev": 50, "train": 500, "freeze": 500}.get(args.train_profile, 50)
+                if row_count < min_samples:
+                    print(f"❌ BLOCKER: insufficient_samples_for_profile")
+                    print(f"   Dataset has {row_count} rows, but profile '{args.train_profile}' requires {min_samples}")
+                    sys.exit(1)
+                
                 # Check if model exists and force_retrain not set
                 model_path = os.path.join(args.model_dir, "model.pkl")
                 if os.path.exists(model_path) and not args.force_retrain:
@@ -827,6 +873,7 @@ def main():
                     sys.exit(0)
                 
                 print(f"🚀 Training model using {dataset_path}...")
+                print(f"   Dataset: {row_count} rows, Profile: {args.train_profile}")
                 train_data, val_data, test_data = temporal_split(dataset_path)
                 metadata = train_model(train_data, val_data, output_dir=args.model_dir)
                 
