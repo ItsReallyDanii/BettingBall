@@ -74,6 +74,41 @@ def run_readiness_check(profile: str = "freeze"):
     print(f"🚦 Initiating Production Readiness Check ({profile})...")
     from src.readiness import generate_model_card, generate_data_card, generate_repro_manifest, compile_freeze_blockers, _file_hash
     from src.data_quality import validate_dataset
+    from src.connectors import DataConnector
+    
+    # 0. Strict ingest validation for freeze profile
+    if profile == "freeze":
+        print("🔒 Freeze profile: validating real data availability...")
+        connector = DataConnector()
+        ingest_success = connector.ingest(require_real=True, min_samples=300)
+        if not ingest_success:
+            print("❌ FREEZE BLOCKED: Real data ingest failed")
+            # Generate minimal readiness report with critical blocker
+            blockers = [{
+                "id": "real_data_ingest_failed",
+                "expected": "real data with >=300 samples",
+                "actual": "missing or insufficient",
+                "severity": "critical",
+                "action_hint": "Provide real local data files with at least 300 game records"
+            }]
+            readiness = {
+                "release_tag": "v1.9.4-real-dataset-freeze-unblock",
+                "timestamp_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "git_commit": "unknown",
+                "gate_profile_used": profile,
+                "freeze_thresholds": get_gate_thresholds(profile),
+                "current_metrics": {},
+                "overall_verdict": "NO-GO",
+                "blocker_count": len(blockers),
+                "blockers": list(blockers),
+                "artifacts_present": {},
+                "exit_code": 1
+            }
+            with open("outputs/audits/readiness_report.json", "w") as f:
+                json.dump(readiness, f, indent=2)
+            with open("outputs/audits/freeze_blockers.json", "w") as f:
+                json.dump({"blockers": list(blockers)}, f, indent=2)
+            return False
     
     # 1. QA Check (Load Data)
     with open("outputs/predictions/results.json", "r") as f:
@@ -177,7 +212,8 @@ def run_readiness_check(profile: str = "freeze"):
         "overall_verdict": overall_verdict,
         "blocker_count": len(unique_blockers),
         "blockers": list(unique_blockers),
-        "artifacts_present": artifacts_present
+        "artifacts_present": artifacts_present,
+        "exit_code": 0 if success else 1
     }
     
     atomic_write_json(readiness, "outputs/audits/readiness_report.json")

@@ -37,7 +37,7 @@ class FeatureExtractor:
         return [1.0, diff, f3, f4] # 1.0 is bias term
 
 class BaselineModel:
-    def __init__(self, learning_rate=0.01, epochs=50):
+    def __init__(self, learning_rate=0.01, epochs=100):
         # Weights: [Bias, Diff, DaysRest, OppDef]
         # Initial deterministic weights for "cold start"
         self.weights = [0.0, 0.1, 0.05, -0.01] 

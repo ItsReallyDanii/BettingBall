@@ -32,18 +32,43 @@ class DataConnector:
             return False
         return True
 
-    def ingest(self):
+    def ingest(self, require_real: bool = False, min_samples: int = 300):
         os.makedirs("data/raw", exist_ok=True)
         os.makedirs("outputs/audits", exist_ok=True)
+        
+        self.report["min_samples_required"] = min_samples
         success = self._load_from_local()
 
-        # If data doesn't exist, generate synthetic data
-        if not success:
-            print("⚠️ No data found in data/raw/. Generating synthetic data...")
-            success = self._generate_synthetic_data(100)
-            self.report["data_mode"] = "synthetic"
-        else:
+        # Strict mode: no synthetic fallback
+        if require_real:
+            if not success:
+                self.report["data_mode"] = "missing"
+                self.report["errors"].append("require_real=True but local data files missing or invalid")
+                with open("outputs/audits/ingest_report.json", "w") as f:
+                    json.dump(self.report, f, indent=2)
+                return False
+            
+            # Validate sample size
+            total_samples = self.report["records_written"]["games"]["count"]
+            self.report["sample_size_observed"] = total_samples
+            if total_samples < min_samples:
+                self.report["data_mode"] = "real"
+                self.report["errors"].append(f"Insufficient samples: {total_samples} < {min_samples}")
+                with open("outputs/audits/ingest_report.json", "w") as f:
+                    json.dump(self.report, f, indent=2)
+                return False
+            
             self.report["data_mode"] = "real"
+        else:
+            # Permissive mode: synthetic fallback allowed
+            if not success:
+                print("⚠️ No data found in data/raw/. Generating synthetic data...")
+                success = self._generate_synthetic_data(100)
+                self.report["data_mode"] = "synthetic"
+                self.report["sample_size_observed"] = self.report["records_written"]["games"]["count"]
+            else:
+                self.report["data_mode"] = "real"
+                self.report["sample_size_observed"] = self.report["records_written"]["games"]["count"]
 
         with open("outputs/audits/ingest_report.json", "w") as f:
             json.dump(self.report, f, indent=2)
