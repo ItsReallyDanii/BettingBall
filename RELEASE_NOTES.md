@@ -1,6 +1,37 @@
+# Release Notes - v2.0.0-validator-v1
+
+**Status:** RELEASED
+**Date:** 2026-02-05
+**Verdict:** V1 Validator Complete
+
+## What's New
+
+### Betting Recommendation Validator (`src/validator.py`)
+Production-ready validator for betting recommendation payloads. Enforces strict schema, numeric bounds, enum membership, and cross-field logical consistency before any recommendation is acted upon.
+
+- **Required fields**: event_type, threshold, probability, odds, stake, confidence
+- **Numeric bounds**: probability `[0,1]`, American odds `<=-100 or >=100`, stake `(0,10000]`
+- **Logical checks**: market/event_type compatibility, implied-probability edge divergence
+- **Structured errors**: machine-readable `{code, field, message, meta}` objects; no short-circuiting
+- **Safe defaults**: horizon defaults to `"pregame"` when absent (documented; no other silent defaults)
+
+### Test Suite Expansion
+- Added `tests/test_validator.py` with 67 test cases covering happy path, missing fields, wrong types, out-of-range values, contradictory inputs, and boundary values.
+- Total test count: **79 tests** across 4 files, all passing.
+- Single command: `python -m unittest discover -s tests -v`
+
+### Documentation
+- README updated with full validator contract, schema table, accepted ranges, example payloads, error code reference, and usage snippet.
+- CLAUDE.md added with minimal project operating instructions.
+
+## Breaking Changes
+None. The validator is a new module (`src/validator.py`). No existing files were modified.
+
+---
+
 # Release Notes - v1.9.1-gate-profiles-and-reporting
 
-**Status:** ACTIVE
+**Status:** SUPERSEDED by v2.0.0
 **Date:** 2026-02-05
 **Verdict:** GO (Dev Config) / NO-GO (Freeze Config)
 
