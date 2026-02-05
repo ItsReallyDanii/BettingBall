@@ -1,0 +1,112 @@
+[
+  {
+    "event_id": "evt_001",
+    "market_type": "moneyline",
+    "selection": "home",
+    "player_id": "",
+    "team_id": "",
+    "line": null,
+    "price_american": -150,
+    "sportsbook": "DraftKings",
+    "timestamp_utc": "2026-02-05T22:00:00Z"
+  },
+  {
+    "event_id": "evt_001",
+    "market_type": "moneyline",
+    "selection": "away",
+    "player_id": "",
+    "team_id": "",
+    "line": null,
+    "price_american": 130,
+    "sportsbook": "DraftKings",
+    "timestamp_utc": "2026-02-05T22:00:00Z"
+  },
+  {
+    "event_id": "evt_002",
+    "market_type": "spread",
+    "selection": "home",
+    "player_id": "",
+    "team_id": "",
+    "line": 7.5,
+    "price_american": -110,
+    "sportsbook": "FanDuel",
+    "timestamp_utc": "2026-02-05T22:15:00Z"
+  },
+  {
+    "event_id": "evt_002",
+    "market_type": "spread",
+    "selection": "away",
+    "player_id": "",
+    "team_id": "",
+    "line": -7.5,
+    "price_american": -110,
+    "sportsbook": "FanDuel",
+    "timestamp_utc": "2026-02-05T22:15:00Z"
+  },
+  {
+    "event_id": "evt_003",
+    "market_type": "total",
+    "selection": "over",
+    "player_id": "",
+    "team_id": "",
+    "line": 220.5,
+    "price_american": -115,
+    "sportsbook": "BetMGM",
+    "timestamp_utc": "2026-02-05T22:30:00Z"
+  },
+  {
+    "event_id": "evt_003",
+    "market_type": "total",
+    "selection": "under",
+    "player_id": "",
+    "team_id": "",
+    "line": 220.5,
+    "price_american": -105,
+    "sportsbook": "BetMGM",
+    "timestamp_utc": "2026-02-05T22:30:00Z"
+  },
+  {
+    "event_id": "evt_004",
+    "market_type": "player_points",
+    "selection": "over",
+    "player_id": "p_123",
+    "team_id": "",
+    "line": 25.5,
+    "price_american": 105,
+    "sportsbook": "Caesars",
+    "timestamp_utc": "2026-02-05T23:00:00Z"
+  },
+  {
+    "event_id": "evt_004",
+    "market_type": "player_points",
+    "selection": "under",
+    "player_id": "p_123",
+    "team_id": "",
+    "line": 25.5,
+    "price_american": -125,
+    "sportsbook": "Caesars",
+    "timestamp_utc": "2026-02-05T23:00:00Z"
+  },
+  {
+    "event_id": "evt_005",
+    "market_type": "moneyline",
+    "selection": "home",
+    "player_id": "",
+    "team_id": "",
+    "line": null,
+    "price_american": -200,
+    "sportsbook": "PointsBet",
+    "timestamp_utc": "2026-02-05T23:15:00Z"
+  },
+  {
+    "event_id": "evt_005",
+    "market_type": "moneyline",
+    "selection": "away",
+    "player_id": "",
+    "team_id": "",
+    "line": null,
+    "price_american": 175,
+    "sportsbook": "PointsBet",
+    "timestamp_utc": "2026-02-05T23:15:00Z"
+  }
+]

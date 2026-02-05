@@ -734,6 +734,9 @@ def main():
     parser.add_argument("--readiness_profile", type=str, default="freeze", choices=["dev", "freeze"], help="Profile for readiness check")
     parser.add_argument("--profile", type=str, choices=["dev", "freeze"], help="Alias for gate_profile and readiness_profile")
     parser.add_argument("--archive", action="store_true", help="Archive current audit artifacts for release")
+    parser.add_argument("--score_odds", action="store_true", help="Score odds and generate recommendations")
+    parser.add_argument("--odds_input", type=str, help="Path to odds file (CSV or JSON)")
+    parser.add_argument("--join_tolerance_minutes", type=int, default=180, help="Tolerance for timestamp-based game matching (default: 180)")
     args = parser.parse_args()
 
     # Handle profile alias
@@ -760,6 +763,21 @@ def main():
             
             success = archive_release(SETTINGS.release_tag, commit)
             sys.exit(0 if success else 1)
+        if args.score_odds:
+            if not args.odds_input:
+                print("❌ ERROR: --odds_input required with --score_odds")
+                sys.exit(1)
+            from src.inference import score_odds_file
+            try:
+                summary = score_odds_file(args.odds_input, join_tolerance_minutes=args.join_tolerance_minutes)
+                print(f"✅ Scored {summary['total_opportunities']} opportunities")
+                print(f"   PASS: {summary['recommendations']['PASS']}")
+                print(f"   LEAN: {summary['recommendations']['LEAN']}")
+                print(f"   BET:  {summary['recommendations']['BET']}")
+                sys.exit(0)
+            except Exception as e:
+                print(f"❌ ERROR: {e}")
+                sys.exit(1)
         if args.backtest:
             run_backtest_workflow(args.test_ratio, args.gate_profile)
             sys.exit(0)
