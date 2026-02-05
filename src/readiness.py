@@ -4,7 +4,7 @@ import hashlib
 import platform
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 def _file_hash(path: str) -> str:
@@ -69,7 +69,7 @@ def generate_data_card(inputs: List[Dict[str, Any]], targets: List[int]) -> Dict
 def generate_repro_manifest(cmd_args: List[str], input_hashes: Dict[str, str], output_hashes: Dict[str, str], git_commit: str = "unknown", random_seeds: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
     random_seeds = random_seeds or {}
     return {
-        "timestamp_utc": datetime.utcnow().isoformat() + "Z",
+        "timestamp_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "platform": platform.platform(),
         "python_version": sys.version,
         "git_commit": git_commit,

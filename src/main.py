@@ -169,7 +169,7 @@ def run_readiness_check(profile: str = "freeze"):
     print("\n📜 Readiness Report:")
     print(json.dumps(readiness, indent=2))
     
-    return len(unique_blockers) == 0
+    return success
 
 def validate_results_data(data):
     if not isinstance(data, list):
