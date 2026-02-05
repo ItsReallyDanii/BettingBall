@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GameContextEntity",
+  "type": "object",
+  "required": ["game_id", "date_utc", "home_team_id", "away_team_id", "spread_context"],
+  "properties": {
+    "game_id": { "type": "string" },
+    "date_utc": { "type": "string", "format": "date-time" },
+    "home_team_id": { "type": "string" },
+    "away_team_id": { "type": "string" },
+    "is_home_for_subject_team": { "type": "boolean" },
+    "days_rest_team": { "type": "number" },
+    "days_rest_opponent": { "type": "number" },
+    "head_to_head_last_3": { "type": "number" },
+    "defender_matchup_index": { "type": "number" },
+    "ref_crew_foul_tendency": { "type": "number" },
+    "travel_fatigue_index": { "type": "number" },
+    "spread_context": {
+      "type": "object",
+      "properties": {
+        "market_open_line": { "type": "number" },
+        "market_current_line": { "type": "number" },
+        "line_move_abs": { "type": "number" }
+      }
+    }
+  }
+}

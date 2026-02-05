@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PlayerEntity",
+  "type": "object",
+  "required": ["player_id", "team_id", "position", "recent_form", "workload", "availability"],
+  "properties": {
+    "player_id": { "type": "string" },
+    "team_id": { "type": "string" },
+    "position": { "type": "string" },
+    "minutes_last_3": { "type": "number" },
+    "minutes_last_5": { "type": "number" },
+    "usage_rate_last_5": { "type": "number" },
+    "true_shooting_last_5": { "type": "number" },
+    "assist_rate_last_5": { "type": "number" },
+    "rebound_chances_last_5": { "type": "number" },
+    "turnover_rate_last_5": { "type": "number" },
+    "recent_form": {
+      "type": "object",
+      "properties": {
+        "points_avg_5": { "type": "number" },
+        "trend_points_slope_5": { "type": "number" },
+        "trend_ts_slope_5": { "type": "number" }
+      }
+    },
+    "workload": {
+      "type": "object",
+      "properties": {
+        "days_rest": { "type": "number" },
+        "back_to_back": { "type": "boolean" },
+        "travel_distance_km_recent": { "type": "number" }
+      }
+    },
+    "availability": {
+      "type": "object",
+      "properties": {
+        "injury_status": { "type": "string" },
+        "probable_minutes_cap": { "type": "number" }
+      }
+    }
+  }
+}

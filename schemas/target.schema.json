@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PredictionTarget",
+  "type": "object",
+  "required": ["event_type", "threshold", "horizon"],
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "enum": ["player_points_over", "player_assists_over", "player_rebounds_over", "team_total_over", "spread_cover"]
+    },
+    "threshold": { "type": "number" },
+    "horizon": { "type": "string", "enum": ["pregame"] }
+  }
+}

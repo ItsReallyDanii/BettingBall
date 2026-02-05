@@ -1,0 +1,5 @@
+# Modeling config placeholders
+task: binary_probability
+baseline_model: logistic_regression
+time_split: true
+metrics: [log_loss, brier_score, auc]

@@ -1,0 +1,10 @@
+confidence_grade:
+  A:
+    min_prob_margin: 0.15
+    max_missing_critical: 0
+  B:
+    min_prob_margin: 0.10
+    max_missing_critical: 1
+  C:
+    min_prob_margin: 0.05
+    max_missing_critical: 2

@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TeamEntity",
+  "type": "object",
+  "required": ["team_id", "pace", "off_rating", "def_rating", "rotation_stability"],
+  "properties": {
+    "team_id": { "type": "string" },
+    "pace": { "type": "number" },
+    "off_rating": { "type": "number" },
+    "def_rating": { "type": "number" },
+    "net_rating_last_10": { "type": "number" },
+    "turnover_pct": { "type": "number" },
+    "rebound_pct": { "type": "number" },
+    "three_rate": { "type": "number" },
+    "rim_freq": { "type": "number" },
+    "rotation_stability": { "type": "number" },
+    "bench_minutes_share": { "type": "number" }
+  }
+}
