@@ -46,20 +46,47 @@ def score_odds_file(
     with open(os.path.join(output_dir, "join_audit.json"), "w") as f:
         json.dump(join_result["audit"], f, indent=2)
     
-    # Load model
-    model = BaselineModel()
-    
-    # Load calibrator if exists
+    # Load model - prefer trained model, fallback to baseline
+    model_source = "baseline_fallback"
+    model = None
     calibrator = None
-    calibrator_path = "outputs/models/calibrator.pkl"
-    if os.path.exists(calibrator_path):
-        with open(calibrator_path, "rb") as f:
-            calibrator = pickle.load(f)
+    
+    trained_model_path = "outputs/models/model.pkl"
+    trained_calibrator_path = "outputs/models/calibrator.pkl"
+    
+    if os.path.exists(trained_model_path):
+        # Use trained model
+        try:
+            with open(trained_model_path, "rb") as f:
+                model = pickle.load(f)
+            model_source = "trained"
+            
+            if os.path.exists(trained_calibrator_path):
+                with open(trained_calibrator_path, "rb") as f:
+                    calibrator = pickle.load(f)
+        except Exception as e:
+            print(f"Warning: Failed to load trained model: {e}. Falling back to baseline.")
+            model = None
+    
+    if model is None:
+        # Fallback to baseline
+        from src.model_baseline import BaselineModel
+        model = BaselineModel()
+        model_source = "baseline_fallback"
+        
+        # Try baseline calibrator
+        baseline_calibrator_path = "outputs/models/calibrator.pkl"
+        if os.path.exists(baseline_calibrator_path):
+            try:
+                with open(baseline_calibrator_path, "rb") as f:
+                    calibrator = pickle.load(f)
+            except:
+                pass
     
     # Score matched records only
     recommendations = []
     for rec in join_result["matched"]:
-        scored = _score_single_record(rec, model, calibrator)
+        scored = _score_single_record(rec, model, calibrator, model_source)
         recommendations.append(scored)
     
     # Sort deterministically
@@ -72,7 +99,7 @@ def score_odds_file(
     
     return summary
 
-def _score_single_record(rec: Dict[str, Any], model: BaselineModel, calibrator) -> Dict[str, Any]:
+def _score_single_record(rec: Dict[str, Any], model, calibrator, model_source: str) -> Dict[str, Any]:
     """Score a single odds record with joined context."""
     # Extract features from joined data
     features = rec.get("features", [1.0, 0.0, 0.0, 0.0])
@@ -82,13 +109,16 @@ def _score_single_record(rec: Dict[str, Any], model: BaselineModel, calibrator) 
     
     # Apply calibration if available
     if calibrator:
-        model_prob = calibrator.predict([raw_prob])[0]
+        model_prob = calibrator.predict(raw_prob)
     else:
         model_prob = raw_prob
     
     # Calculate confidence grade based on probability distance from 0.5 and data completeness
     missing_fields = rec.get("missing_fields", [])
     confidence_grade = _calculate_confidence_grade(model_prob, missing_fields)
+    
+    # Uncertainty note
+    # uncertainty_note = _generate_uncertainty_note(confidence_grade, missing_fields, calibrator is not None)
     
     # Calculate payout
     price = rec["price_american"]
@@ -122,6 +152,7 @@ def _score_single_record(rec: Dict[str, Any], model: BaselineModel, calibrator) 
         "match_status": rec.get("match_status", "unknown"),
         "join_keys_used": rec.get("join_keys_used", []),
         "missing_fields": missing_fields,
+        "model_source": model_source,
         "model_prob_raw": round(raw_prob, 6),
         "model_prob_calibrated": round(model_prob, 6),
         "implied_prob": rec["implied_prob"],

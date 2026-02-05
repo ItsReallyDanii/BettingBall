@@ -737,6 +737,12 @@ def main():
     parser.add_argument("--score_odds", action="store_true", help="Score odds and generate recommendations")
     parser.add_argument("--odds_input", type=str, help="Path to odds file (CSV or JSON)")
     parser.add_argument("--join_tolerance_minutes", type=int, default=180, help="Tolerance for timestamp-based game matching (default: 180)")
+    parser.add_argument("--build_dataset", action="store_true", help="Build training dataset from local CSVs")
+    parser.add_argument("--train", action="store_true", help="Train model with hyperparameter search")
+    parser.add_argument("--evaluate_train", action="store_true", help="Evaluate trained model and apply gates")
+    parser.add_argument("--train_profile", type=str, default="dev", choices=["dev", "train", "freeze"], help="Profile for training gates")
+    parser.add_argument("--model_dir", type=str, default="outputs/models", help="Directory for model artifacts")
+    parser.add_argument("--force_retrain", action="store_true", help="Force retraining even if model exists")
     args = parser.parse_args()
 
     # Handle profile alias
@@ -777,6 +783,67 @@ def main():
                 sys.exit(0)
             except Exception as e:
                 print(f"❌ ERROR: {e}")
+                sys.exit(1)
+        if args.build_dataset:
+            from src.dataset import build_dataset
+            try:
+                metadata = build_dataset()
+                print(f"✅ Built dataset: {metadata['total_records']} records")
+                print(f"   Output: {metadata['output_path']}")
+                sys.exit(0)
+            except Exception as e:
+                print(f"❌ ERROR: {e}")
+                sys.exit(1)
+        if args.train:
+            from src.dataset import temporal_split
+            from src.train import train_model
+            try:
+                dataset_path = "outputs/training/dataset.csv"
+                if not os.path.exists(dataset_path):
+                    print("❌ ERROR: Dataset not found. Run --build_dataset first.")
+                    sys.exit(1)
+                
+                # Check if model exists and force_retrain not set
+                model_path = os.path.join(args.model_dir, "model.pkl")
+                if os.path.exists(model_path) and not args.force_retrain:
+                    print(f"⚠️  Model already exists at {model_path}")
+                    print("   Use --force_retrain to overwrite")
+                    sys.exit(0)
+                
+                train_data, val_data, test_data = temporal_split(dataset_path)
+                metadata = train_model(train_data, val_data, output_dir=args.model_dir)
+                
+                print(f"✅ Training complete")
+                print(f"   Val Brier: {metadata['metrics']['val']['brier']:.4f}")
+                print(f"   Val ECE: {metadata['metrics']['val']['ece']:.4f}")
+                print(f"   Best params: {metadata['best_params']}")
+                sys.exit(0)
+            except Exception as e:
+                print(f"❌ ERROR: {e}")
+                import traceback
+                traceback.print_exc()
+                sys.exit(1)
+        if args.evaluate_train:
+            from src.evaluate_v2 import evaluate_train_profile
+            try:
+                report = evaluate_train_profile(model_dir=args.model_dir)
+                print(f"\n{'='*50}")
+                print(f"VERDICT: {report['verdict']}")
+                print(f"{'='*50}")
+                print(f"Test Brier: {report['test_metrics']['brier']:.4f}")
+                print(f"Test ECE: {report['test_metrics']['ece']:.4f}")
+                print(f"Test Hit Rate: {report['test_metrics']['hit_rate']:.4f}")
+                
+                if report['blockers']:
+                    print(f"\n⚠️  BLOCKERS:")
+                    for b in report['blockers']:
+                        print(f"   [{b['severity']}] {b['id']}: {b['message']}")
+                
+                sys.exit(0 if report['verdict'] == 'GO' else 1)
+            except Exception as e:
+                print(f"❌ ERROR: {e}")
+                import traceback
+                traceback.print_exc()
                 sys.exit(1)
         if args.backtest:
             run_backtest_workflow(args.test_ratio, args.gate_profile)
