@@ -1,21 +1,14 @@
 import os
 import csv
 import json
-import time
-import urllib.request
-import urllib.parse
 from datetime import datetime, timezone, timedelta
 import hashlib
 
 class DataConnector:
     def __init__(self):
-        self.bdl_key = os.getenv("BDL_API_KEY")
-        self.odds_key = os.getenv("ODDS_API_KEY")
         self.report = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "source": "synthetic",
-            "auth_ok": False,
-            "network_ok": False,
+            "source": "local",
             "schema_pass": True,
             "records_written": {
                 "teams": {"count": 0, "errors": 0},
@@ -32,37 +25,6 @@ class DataConnector:
             "targets": ["game_id", "player_id", "event_type", "threshold", "horizon", "actual"]
         }
 
-    def _fetch_bdl(self, endpoint, params=None):
-        url = f"https://api.balldontlie.io/v1/{endpoint}"
-        if params:
-            # Handle list params correctly for BDL (e.g. player_ids[]: [1, 2])
-            query_parts = []
-            for k, v in params.items():
-                if isinstance(v, list):
-                    for item in v:
-                        query_parts.append(f"{k}={item}")
-                else:
-                    query_parts.append(f"{k}={v}")
-            url += "?" + "&".join(query_parts)
-            
-        headers = {"Authorization": self.bdl_key}
-        for attempt in range(1, 4):
-            try:
-                req = urllib.request.Request(url, headers=headers)
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    self.report["auth_ok"] = True
-                    self.report["network_ok"] = True
-                    return json.loads(resp.read().decode())
-            except Exception as e:
-                code = getattr(e, 'code', None)
-                if code == 429:
-                    print(f"⚠️ Rate limited (429) at {url}. Waiting 60s... (Attempt {attempt}/3)")
-                    time.sleep(60)
-                else:
-                    self.report["errors"].append(f"HTTP {code}: {str(e)}" if code else str(e))
-                    return None
-        return None
-
     def _validate_row(self, schema_key, row):
         expected = self.schemas[schema_key]
         if not all(k in row for k in expected):
@@ -72,102 +34,87 @@ class DataConnector:
 
     def ingest(self):
         os.makedirs("data/raw", exist_ok=True)
-        if self.bdl_key:
-            self.report["source"] = "real"
-            success = self._ingest_real()
-        else:
-            print("⚠️ No BDL_API_KEY found. Falling back to synthetic mode.")
+        os.makedirs("outputs/audits", exist_ok=True)
+        success = self._load_from_local()
+
+        # If data doesn't exist, generate synthetic data
+        if not success:
+            print("⚠️ No data found in data/raw/. Generating synthetic data...")
             success = self._generate_synthetic_data(1000)
-            self.report["auth_ok"] = True
-            self.report["network_ok"] = True
-            
+
         with open("outputs/audits/ingest_report.json", "w") as f:
             json.dump(self.report, f, indent=2)
         return success
 
-    def _ingest_real(self):
-        # Ingest Teams
-        teams_resp = self._fetch_bdl("teams")
-        if not teams_resp or "data" not in teams_resp:
-            self.report["errors"].append("Failed to fetch teams.")
+    def _load_from_local(self):
+        """Load data from existing CSV files in data/raw/"""
+        data_dir = "data/raw"
+        required_files = ["teams.csv", "players.csv", "games.csv", "targets.csv"]
+
+        # Check if all required files exist
+        for fname in required_files:
+            if not os.path.exists(os.path.join(data_dir, fname)):
+                return False
+
+        # Load teams
+        try:
+            with open(os.path.join(data_dir, "teams.csv"), "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if self._validate_row("teams", row):
+                        self.report["records_written"]["teams"]["count"] += 1
+                    else:
+                        self.report["records_written"]["teams"]["errors"] += 1
+        except Exception as e:
+            self.report["errors"].append(f"Failed to load teams.csv: {str(e)}")
             return False
-            
-        with open("data/raw/teams.csv", "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=self.schemas["teams"])
-            w.writeheader()
-            for t in teams_resp["data"]:
-                row = {
-                    "team_id": t["abbreviation"], "pace": 100.0, "off_rating": 110.0, "def_rating": 110.0,
-                    "rotation_stability": 0.8, "net_rating_last_10": 0.0, "turnover_pct": 0.14,
-                    "rebound_pct": 0.5, "three_rate": 0.4, "rim_freq": 0.3, "bench_minutes_share": 0.3
-                }
-                if self._validate_row("teams", row):
-                    w.writerow(row)
-                    self.report["records_written"]["teams"]["count"] += 1
 
-        # Ingest Example Players (LAL)
-        players_resp = self._fetch_bdl("players", {"team_ids[]": [14], "per_page": 50})
-        if players_resp and "data" in players_resp:
-            # Fetch stats for first player to enrich features
-            player_0 = players_resp["data"][0]
-            stats_resp = self._fetch_bdl("season_averages", {"season": 2023, "player_ids[]": [player_0["id"]]})
-            avg_pts = stats_resp["data"][0]["pts"] if stats_resp and stats_resp.get("data") and len(stats_resp["data"]) > 0 else 25.0
-
-            with open("data/raw/players.csv", "w", newline="", encoding="utf-8") as f:
-                w = csv.DictWriter(f, fieldnames=self.schemas["players"])
-                w.writeheader()
-                for p in players_resp["data"]:
-                    row = {
-                        "player_id": "LBJ_01", # Simplified link for infra validation
-                        "team_id": p["team"]["abbreviation"], "position": p["position"] or "G",
-                        "minutes_last_3": 30.0, "minutes_last_5": 30.0, "usage_rate_last_5": 0.2,
-                        "true_shooting_last_5": 0.55, "assist_rate_last_5": 0.15, "rebound_chances_last_5": 5.0,
-                        "turnover_rate_last_5": 0.1, "points_avg_5": avg_pts, "trend_points_slope_5": 0.1,
-                        "trend_ts_slope_5": 0.0, "days_rest": 2, "back_to_back": "False",
-                        "travel_distance_km_recent": 0, "injury_status": "healthy", "probable_minutes_cap": ""
-                    }
+        # Load players
+        try:
+            with open(os.path.join(data_dir, "players.csv"), "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
                     if self._validate_row("players", row):
-                        w.writerow(row)
                         self.report["records_written"]["players"]["count"] += 1
+                    else:
+                        self.report["records_written"]["players"]["errors"] += 1
+        except Exception as e:
+            self.report["errors"].append(f"Failed to load players.csv: {str(e)}")
+            return False
 
-        # Ingest Games & Targets (Loop to get >= 1000 samples)
-        all_targets = []
-        with open("data/raw/games.csv", "w", newline="", encoding="utf-8") as f_g:
-            w_g = csv.DictWriter(f_g, fieldnames=self.schemas["games"])
-            w_g.writeheader()
-            
-            for page in range(1, 2): # Just 1 page (100 samples)
-                time.sleep(10.0) # Rate limit protection
-                games_resp = self._fetch_bdl("games", {"seasons[]": [2024], "per_page": 100, "page": page})
-                if not games_resp or "data" not in games_resp: break
-                
-                for g in games_resp["data"]:
-                    gid = f"BDL_{g['id']}"
-                    row = {
-                        "game_id": gid, "date_utc": g["date"], "home_team_id": g["home_team"]["abbreviation"], 
-                        "away_team_id": g["visitor_team"]["abbreviation"], "is_home_for_subject_team": "True",
-                        "days_rest_team": 2, "days_rest_opponent": 2, "head_to_head_last_3": 1.0, 
-                        "defender_matchup_index": 0.5, "ref_crew_foul_tendency": 0.1, "travel_fatigue_index": 0.1,
-                        "market_open_line": 220.0, "market_current_line": 222.0, "line_move_abs": 2.0
-                    }
+        # Load games
+        try:
+            with open(os.path.join(data_dir, "games.csv"), "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
                     if self._validate_row("games", row):
-                        w_g.writerow(row)
                         self.report["records_written"]["games"]["count"] += 1
-                        all_targets.append({
-                            "game_id": gid, "player_id": "LBJ_01", 
-                            "event_type": "player_points_over",
-                            "threshold": 20.5, "horizon": "pregame", "actual": 1 if g["home_team_score"] > 110 else 0
-                        })
-                if len(all_targets) >= 50: break
+                    else:
+                        self.report["records_written"]["games"]["errors"] += 1
+        except Exception as e:
+            self.report["errors"].append(f"Failed to load games.csv: {str(e)}")
+            return False
 
-        if all_targets:
-            with open("data/raw/targets.csv", "w", newline="", encoding="utf-8") as f_t:
-                w_t = csv.DictWriter(f_t, fieldnames=self.schemas["targets"])
-                w_t.writeheader()
-                w_t.writerows(all_targets)
-                self.report["records_written"]["targets"]["count"] = len(all_targets)
+        # Load targets
+        try:
+            with open(os.path.join(data_dir, "targets.csv"), "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if self._validate_row("targets", row):
+                        self.report["records_written"]["targets"]["count"] += 1
+                    else:
+                        self.report["records_written"]["targets"]["errors"] += 1
+        except Exception as e:
+            self.report["errors"].append(f"Failed to load targets.csv: {str(e)}")
+            return False
 
-        return self.report["records_written"]["teams"]["count"] > 0 and self.report["records_written"]["targets"]["count"] >= 50
+        # Verify we have data
+        total_records = sum(self.report["records_written"][k]["count"] for k in self.report["records_written"])
+        if total_records == 0:
+            self.report["errors"].append("No valid records found in local data files")
+            return False
+
+        return True
 
     def _generate_synthetic_data(self, n):
         with open("data/raw/teams.csv", "w", newline="", encoding="utf-8") as f:
