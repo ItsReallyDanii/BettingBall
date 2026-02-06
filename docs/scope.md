@@ -21,9 +21,24 @@ BettingBall is designed as a local-first predictive engine. All data ingestion, 
     - Requires all Generalization Policy thresholds to be met.
     - Claims allowed: "stable market alpha", "production-ready edge".
 
+## What "100% Complete" Means
+
+### Prototype Scope (current)
+- All 6 v3 feature families implemented: injuries, home/away splits, pace, matchup dynamics, usage/minutes/shooting trends.
+- End-to-end pipeline runs with sparse or enriched data.
+- Missing-data handling: every absent field produces stable flags and deterministic assumptions.
+- 155 tests covering v1 safety + v3 features pass.
+- Output contract is compact, auditable, and deterministic.
+
+### Production Scope (requires)
+- Real historical data with >= 1000 games, >= 20 teams, >= 60-day span.
+- All generalization gate thresholds met.
+- External data validation for injury sources (currently flagged high-risk when absent).
+- Calibration verified on out-of-sample data.
+
 ## Safety Hardening (V1)
 - Generalization gate enforces prototype_only when thresholds are not met.
 - Leakage gate blocks release claims if any check fails.
 - All prediction outputs follow the structured contract in `src/safety.py`.
-- Risk tagging is mandatory on every factor; see `configs/safety.yaml`.
+- Risk tagging is mandatory on every factor; see `configs/safety.yaml` and `src/features_v3.py`.
 - Missing data produces explicit flags and documented assumptions.

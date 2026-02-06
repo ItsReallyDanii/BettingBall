@@ -10,16 +10,21 @@ from typing import List, Dict, Any, Tuple, Optional
 
 from src.calibration import PlattScaler, IsotonicScaler
 from src.features_v2 import extract_features_v2, features_to_vector, FEATURE_COLUMNS
+from src.features_v3 import (
+    extract_v3_features, v3_features_to_vector, V3_FEATURE_COLUMNS,
+    DataQualityTracker, feature_availability_report, FEATURE_FAMILIES,
+)
 
 class LogisticRegressionV2:
     """Enhanced logistic regression with L2 regularization."""
     
-    def __init__(self, learning_rate: float = 0.01, epochs: int = 200, l2_lambda: float = 0.01, seed: int = 42):
+    def __init__(self, learning_rate: float = 0.01, epochs: int = 200, l2_lambda: float = 0.01, seed: int = 42, n_features: Optional[int] = None):
         random.seed(seed)
         self.lr = learning_rate
         self.epochs = epochs
         self.l2_lambda = l2_lambda
-        self.weights = [random.gauss(0, 0.01) for _ in range(len(FEATURE_COLUMNS))]
+        dim = n_features if n_features is not None else len(FEATURE_COLUMNS) + len(V3_FEATURE_COLUMNS)
+        self.weights = [random.gauss(0, 0.01) for _ in range(dim)]
         self.bias = 0.0
     
     def sigmoid(self, z: float) -> float:
@@ -72,11 +77,14 @@ def train_model(
     os.makedirs(output_dir, exist_ok=True)
     
     # Feature manifest
-    feature_manifest = {"features": {}, "column_order": FEATURE_COLUMNS}
-    
+    all_columns = FEATURE_COLUMNS + V3_FEATURE_COLUMNS
+    feature_manifest = {"features": {}, "column_order": all_columns}
+
     # Extract features
     X_train, y_train = _prepare_features(train_data, feature_manifest)
     X_val, y_val = _prepare_features(val_data, feature_manifest)
+
+    n_features = len(all_columns)
     
     # Hyperparameter search
     best_model = None
@@ -101,10 +109,11 @@ def train_model(
                 learning_rate=params["lr"],
                 epochs=params["epochs"],
                 l2_lambda=params["l2"],
-                seed=seed
+                seed=seed,
+                n_features=n_features,
             )
         else:
-            model = LogisticRegressionV2(seed=seed)
+            model = LogisticRegressionV2(seed=seed, n_features=n_features)
         
         model.fit(X_train, y_train)
         
@@ -170,8 +179,9 @@ def train_model(
     # Model metadata
     metadata = {
         "model_type": model_type,
-        "features_used": FEATURE_COLUMNS,
-        "n_features": len(FEATURE_COLUMNS),
+        "features_used": all_columns,
+        "n_features": len(all_columns),
+        "v3_availability": feature_manifest.get("v3_availability", {}),
         "best_params": best_params,
         "train_window": train_window,
         "metrics": {
@@ -192,10 +202,14 @@ def train_model(
     return metadata
 
 def _prepare_features(data: List[Dict[str, Any]], manifest: Dict[str, Any]) -> Tuple[List[List[float]], List[int]]:
-    """Extract features and targets from data."""
+    """Extract features and targets from data.
+
+    Includes v3 features when underlying data columns are available.
+    """
     X = []
     y = []
-    
+    v3_available = None  # determined on first record
+
     for record in data:
         # Build joined record format
         joined = {
@@ -205,13 +219,25 @@ def _prepare_features(data: List[Dict[str, Any]], manifest: Dict[str, Any]) -> T
             "opponent_team": {k.replace("opponent_", ""): v for k, v in record.items() if k.startswith("opponent_")},
             "line": record.get("threshold", 0)
         }
-        
-        features = extract_features_v2(joined, manifest)
-        feature_vec = features_to_vector(features)
-        
-        X.append(feature_vec)
+
+        # v2 features (always present)
+        features_v2 = extract_features_v2(joined, manifest)
+        vec_v2 = features_to_vector(features_v2)
+
+        # v3 features (appended when data is available)
+        tracker = DataQualityTracker()
+        features_v3 = extract_v3_features(joined, tracker)
+        vec_v3 = v3_features_to_vector(features_v3)
+
+        # On first record, decide which v3 columns to include
+        if v3_available is None:
+            avail_report = feature_availability_report(joined)
+            v3_available = avail_report["available_features"]
+            manifest["v3_availability"] = avail_report
+
+        X.append(vec_v2 + vec_v3)
         y.append(int(record.get("target", 0)))
-    
+
     return X, y
 
 def _train_calibrators(preds: List[float], targets: List[int]) -> Dict[str, Optional[Any]]:

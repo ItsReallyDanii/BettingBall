@@ -95,6 +95,16 @@ Six checks enforced before any release claim is permitted:
 
 If **any** check fails: `release_status = blocked_leakage_risk`.
 
+## Missing Features and Confidence Impact
+
+When optional v3 feature columns are absent, the system:
+1. Uses deterministic defaults (league averages) and flags assumptions.
+2. Emits `missing_data_flags` and `assumptions` in the prediction output contract.
+3. Does **not** block execution -- predictions still run with degraded confidence.
+4. Generates a `feature_availability_report` per run listing `available_features` and `missing_feature_groups`.
+
+The feature availability report is included in training metadata (`v3_availability` key) for audit.
+
 ## Generalization Gate (V1 Safety)
 
 | Threshold | Minimum |
