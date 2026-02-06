@@ -1,35 +1,22 @@
-# Project Scope
+# Project Scope - BettingBall v1.12
 
-## Overview
-Sports AI Basketball V1 is a minimal, reproducible research scaffold for basketball betting risk analysis. It provides:
-- Structured schemas for teams, players, games, and betting targets
-- A validated betting recommendation pipeline
-- Rigorous backtesting and model evaluation infrastructure
-- Production readiness gates for model deployment
+## Local-Only Rule
+BettingBall is designed as a local-first predictive engine. All data ingestion, normalization, training, and inference occur on the local machine. No external cloud processing of private betting history is permitted without explicit opt-in.
 
-## Core Domain
-**Basketball Betting Risk Analysis**
-- Focus: Player prop bets, team totals, spreads
-- Event types: `player_points_over`, `player_assists_over`, `player_rebounds_over`, `team_total_over`, `spread_cover`
-- Time horizons: `pregame`, `live`
-- Confidence levels: `A` (highest) to `F` (lowest)
+## Supported Markets
+- **Moneyline**: Primary focus. Win/Loss predictions for teams and players.
+- **Player Props**: (Points, Rebounds, Assists) - Support via heuristic projections.
+- **Game Totals**: Over/Under markets.
 
-## Entities
-- **Teams**: NBA teams with pace, rating, and performance metrics
-- **Players**: Active roster players with usage, shooting, and fatigue metrics
-- **Games**: NBA matchups with date, home/away teams, and market context
-- **Targets**: Betting outcomes with actual results for evaluation
+## Explicit Non-Goals
+- **Real-time Odds Streaming**: The system focuses on batch historical analysis and pre-game ingestion.
+- **Automatic Bet Execution**: BettingBall provides recommendations; it does not execute trades.
+- **Deep Learning / LLM Training**: All predictive modeling is currently limited to interpretable statistical models (Logistic Regression, etc.).
 
-## Key Constraints
-- No external dependencies beyond `pydantic>=2.7.0`
-- Data sourced from `data/raw/` CSVs (local-only)
-- Deterministic reproducibility (git commit, random seeds, file hashes tracked)
-- All artifacts written to `outputs/` via atomic JSON operations
-- Schema validation at every layer (Pydantic models)
-
-## Out of Scope
-- Real-time market data fetching
-- Live odds aggregation
-- Multi-sport coverage
-- Deep learning models
-- Advanced causal inference
+## Prototype vs Release Claim Policy
+- **Status: Prototype Only**:
+    - Occurs when dataset < 1000 games OR < 20 teams OR < 60 days span.
+    - Claims limited to "in-sample behavior" and "limited out-of-sample signal".
+- **Status: Production Ready**:
+    - Requires all Generalization Policy thresholds to be met.
+    - Claims allowed: "stable market alpha", "production-ready edge".
