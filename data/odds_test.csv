@@ -1,0 +1,2 @@
+event_id,timestamp_utc,market_type,odds_american,selection,sportsbook,implied_prob,price_american
+E1,2023-11-01T20:00:00Z,points_over,-110,over,draftkings,0.52,-110

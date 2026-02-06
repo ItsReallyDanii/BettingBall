@@ -36,7 +36,9 @@ FEATURE_COLUMNS = [
     
     # Interactions
     "pace_usage_interaction",
-    "rest_b2b_interaction"
+    "rest_b2b_interaction",
+    "rest_advantage",
+    "travel_exposure"
 ]
 
 def extract_features_v2(
@@ -104,6 +106,8 @@ def extract_features_v2(
     # Interactions
     features["pace_usage_interaction"] = features["pace_diff"] * features["usage_rate_last_5"]
     features["rest_b2b_interaction"] = features["days_rest_team"] * features["back_to_back"]
+    features["rest_advantage"] = features["days_rest_team"] - features["days_rest_opp"]
+    features["travel_exposure"] = features["travel_fatigue_index"] * features["back_to_back"]
     
     # Track provenance if manifest provided
     if feature_manifest is not None:

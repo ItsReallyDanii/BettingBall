@@ -168,6 +168,26 @@ def temporal_split(
     if val and test:
         if val[-1][timestamp_col] > test[0][timestamp_col]: temporal_order_verified = False
         
+    # Date ranges and class balance
+    def _get_date_range(data):
+        if not data: return {"min": None, "max": None}
+        return {"min": data[0][timestamp_col], "max": data[-1][timestamp_col]}
+    
+    def _get_balance(data):
+        if not data: return {"rate_1": 0.0, "rate_0": 0.0}
+        # Handle both 'target' and 'actual' (for joined dataset vs raw real data)
+        outcomes = []
+        for r in data:
+            val = r.get("target") or r.get("outcome") or r.get("actual")
+            if val is not None:
+                try: 
+                    outcomes.append(float(val))
+                except:
+                    pass
+        if not outcomes: return {"rate_1": 0.0, "rate_0": 0.0}
+        r1 = sum(outcomes) / len(outcomes)
+        return {"rate_1": round(r1, 4), "rate_0": round(1 - r1, 4)}
+
     audit = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "temporal_order_verified": temporal_order_verified,
@@ -177,6 +197,16 @@ def temporal_split(
             "train": len(train),
             "val": len(val),
             "test": len(test)
+        },
+        "date_ranges": {
+            "train": _get_date_range(train),
+            "val": _get_date_range(val),
+            "test": _get_date_range(test)
+        },
+        "class_balance": {
+            "train": _get_balance(train),
+            "val": _get_balance(val),
+            "test": _get_balance(test)
         }
     }
     

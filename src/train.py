@@ -8,7 +8,7 @@ import math
 import random
 from typing import List, Dict, Any, Tuple, Optional
 
-from src.calibration import PlattScaler
+from src.calibration import PlattScaler, IsotonicScaler
 from src.features_v2 import extract_features_v2, features_to_vector, FEATURE_COLUMNS
 
 class LogisticRegressionV2:
@@ -225,6 +225,14 @@ def _train_calibrators(preds: List[float], targets: List[int]) -> Dict[str, Opti
         calibrators["platt"] = platt
     except:
         calibrators["platt"] = None
+    
+    # Isotonic scaling
+    try:
+        iso = IsotonicScaler(n_bins=10)
+        iso.fit(preds, targets)
+        calibrators["isotonic"] = iso
+    except:
+        calibrators["isotonic"] = None
     
     # No calibration baseline
     calibrators["none"] = None

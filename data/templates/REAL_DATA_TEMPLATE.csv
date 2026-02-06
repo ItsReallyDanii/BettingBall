@@ -1,0 +1,6 @@
+event_id,timestamp_utc,market_type,odds_american,outcome,player_id,team_id
+E1,2023-11-01T20:00:00Z,points_over,-110,1,P1,T1
+E2,2023-11-01T21:00:00Z,points_over,+105,0,P2,T1
+E3,2023-11-02T19:30:00Z,points_over,-115,1,P3,T2
+E4,2023-11-02T22:00:00Z,points_over,-110,0,P4,T2
+E5,2023-11-03T18:00:00Z,points_over,+100,1,P1,T1

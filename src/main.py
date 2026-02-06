@@ -746,6 +746,9 @@ def main():
     parser.add_argument("--force_retrain", action="store_true", help="Force retraining even if model exists")
     parser.add_argument("--ingest_real", action="store_true", help="Ingest real historical data from data/real")
     parser.add_argument("--doctor_real_data", action="store_true", help="Diagnose real data issues")
+    parser.add_argument("--print_real_schema", action="store_true", help="Print required schema for real data onboarding")
+    parser.add_argument("--validate_real_data", action="store_true", help="Validate all CSV files in data/real and generate report")
+    parser.add_argument("--allow_bootstrap", action="store_true", help="Allow generating bootstrap dummy data if no real data is found (dev-only)")
     args = parser.parse_args()
 
     # Handle profile alias
@@ -772,13 +775,71 @@ def main():
             
             success = archive_release(SETTINGS.release_tag, commit)
             sys.exit(0 if success else 1)
+        if args.print_real_schema:
+            from src.real_data_loader import REQUIRED_CORE, COLUMN_ALIASES
+            print("\n📋 REAL DATA ONBOARDING SCHEMA")
+            print("="*40)
+            print(f"REQUIRED COLUMNS: {', '.join(REQUIRED_CORE)}")
+            print("\nACCEPTED ALIASES:")
+            for canonical, aliases in COLUMN_ALIASES.items():
+                print(f"  {canonical}: {', '.join(aliases)}")
+            print("\nVALID EXAMPLES:")
+            print("  event_id: 'E1', 'match_123'")
+            print("  timestamp_utc: '2023-11-01T20:00:00Z', '2023-11-01 20:00:00'")
+            print("  market_type: 'points_over', 'moneyline'")
+            print("  odds_american: -110, 105")
+            print("  outcome: 1 (win), 0 (loss)")
+            print("\n5-ROW SAMPLE TEMPLATE:")
+            print("event_id,timestamp_utc,market_type,odds_american,outcome,player_id,team_id")
+            print("E1,2023-11-01T20:00:00Z,points_over,-110,1,P1,T1")
+            print("E2,2023-11-01T21:00:00Z,points_over,+105,0,P2,T1")
+            sys.exit(0)
+
+        if args.validate_real_data:
+            from src.real_data_loader import validate_real_data
+            try:
+                report = validate_real_data()
+                print(f"\n🩺 Real Data Validation Report")
+                print("="*40)
+                print(f"Files Processed: {report['files_processed']}")
+                print(f"Total Rows:     {report['total_rows_scanned']}")
+                print(f"Valid Rows:     {report['total_valid_rows']}")
+                print(f"TS Parse Rate:  {report['ts_parse_success_rate']*100:.1f}%")
+                if 'class_balance' in report and report['class_balance']:
+                    print(f"Min Class Rate: {report['class_balance']['min_rate']*100:.1f}%")
+                
+                print("\nFile-level Summary:")
+                for fr in report['file_reports']:
+                    status = "✅" if fr.get('valid_rows', 0) > 0 else "❌"
+                    print(f"  {status} {fr['file']}: {fr.get('valid_rows', 0)}/{fr.get('total_rows', 0)} valid")
+                
+                sys.exit(0 if report['total_valid_rows'] > 0 else 1)
+            except Exception as e:
+                print(f"❌ ERROR: {e}")
+                sys.exit(1)
+        
         if args.score_odds:
             if not args.odds_input:
                 print("❌ ERROR: --odds_input required with --score_odds")
                 sys.exit(1)
+            
+            # Readiness Guard
+            readiness = "RESEARCH_ONLY"
+            report_path = "outputs/audits/train_report.json"
+            if os.path.exists(report_path):
+                with open(report_path, "r") as f:
+                    report = json.load(f)
+                if report.get("verdict") == "GO" and report.get("profile") in ["train", "freeze"] and report.get("data_mode") == "real":
+                    readiness = "PRODUCTION_READY"
+            
+            print(f"\n{'='*40}")
+            print(f"🚀 MODEL STATUS: {readiness}")
+            print(f"{'='*40}\n")
+            
             from src.inference import score_odds_file
             try:
-                summary = score_odds_file(args.odds_input, join_tolerance_minutes=args.join_tolerance_minutes)
+                summary = score_odds_file(args.odds_input, join_tolerance_minutes=args.join_tolerance_minutes, model_readiness=readiness)
+                
                 print(f"✅ Scored {summary['total_opportunities']} opportunities")
                 print(f"   PASS: {summary['recommendations']['PASS']}")
                 print(f"   LEAN: {summary['recommendations']['LEAN']}")
@@ -789,32 +850,47 @@ def main():
                 sys.exit(1)
         
         if args.doctor_real_data or args.ingest_real:
-            # Bootstrap check
+            from src.real_data_loader import classify_candidate_files
             real_dir = "data/real"
             abs_real_dir = os.path.abspath(real_dir)
-            has_csv = os.path.exists(real_dir) and any(f.lower().endswith(".csv") for f in os.listdir(real_dir))
             
-            # Only allow bootstrap if no data exists AND it's not a production request
+            class_res = classify_candidate_files(real_dir)
+            if not isinstance(class_res, dict):
+                print(f"❌ INTERNAL ERROR: classify_candidate_files returned {type(class_res)}")
+                sys.exit(1)
+            
+            eligible_real = class_res.get("eligible_real_files", [])
+            has_bootstrap = class_res.get("has_bootstrap_files", False)
+            
             is_prod_request = getattr(args, "train_profile", "dev") in ["train", "freeze"]
             
-            if not has_csv:
+            if not eligible_real:
                 if is_prod_request:
-                    print(f"❌ ERROR: No real data found in {abs_real_dir} and production profile requested.")
+                    print(f"❌ ERROR: NO_REAL_FILES. Place real CSV files in {abs_real_dir} for production.")
                     sys.exit(1)
-                    
-                print(f"⚠️  No real data found in {abs_real_dir}. Generating bootstrap example (dev-only)...")
-                os.makedirs(real_dir, exist_ok=True)
-                example_path = os.path.join(real_dir, "_example_real_data.csv")
-                with open(example_path, "w", newline="", encoding="utf-8") as f:
-                    writer = csv.writer(f)
-                    writer.writerow(["event_id", "timestamp_utc", "market_type", "odds_american", "outcome", "player_id", "team_id", "is_bootstrap"])
-                    # Generate 600 dummy rows with some noise to avoid suspicious metrics
-                    for i in range(600):
-                        dt = (datetime.now(timezone.utc) - timedelta(days=610-i)).isoformat().replace("+00:00", "Z")
-                        # Add noise to outcome and odds to pass realism gates in dev mode
-                        outcome = 1 if (i % 2 == 0 or i % 7 == 0) else 0
-                        writer.writerow([f"boot_{i}", dt, "points_over", -105 - (i % 20), outcome, f"P{i%50}", f"T{i%10}", 1])
-                print(f"✅ Created {example_path} (bootstrap/dev-only)")
+                
+                if args.allow_bootstrap and not has_bootstrap:
+                    print(f"⚠️  No real data found in {abs_real_dir}. --allow_bootstrap is TRUE. Generating bootstrap example...")
+                    os.makedirs(real_dir, exist_ok=True)
+                    example_path = os.path.join(real_dir, "_example_real_data.csv")
+                    import random
+                    with open(example_path, "w", newline="", encoding="utf-8") as f:
+                        writer = csv.writer(f)
+                        writer.writerow(["event_id", "timestamp_utc", "market_type", "odds_american", "outcome", "player_id", "team_id", "is_bootstrap"])
+                        for i in range(750):
+                            dt = (datetime.now(timezone.utc) - timedelta(days=900-i)).isoformat().replace("+00:00", "Z")
+                            # Add some noise to outcome to avoid near-zero variance in features/labels
+                            noise = random.random()
+                            outcome = 1 if (i % 2 == 0 and noise > 0.1) or (i % 5 == 0) else 0
+                            odds = -110 + random.randint(-50, 50)
+                            writer.writerow([f"boot_{i}", dt, "points_over", odds, outcome, f"P{random.randint(1, 100)}", f"T{random.randint(1, 30)}", 1])
+                    print(f"✅ Created {example_path} (bootstrap/dev-only). Run again to ingest.")
+                    sys.exit(0)
+                elif not args.allow_bootstrap:
+                    print(f"❌ NO_REAL_FILES: Place real CSV files in {abs_real_dir} or rerun with --allow_bootstrap for dev-only.")
+                    sys.exit(1)
+                # If we reach here, it means has_bootstrap is True and allow_bootstrap is True
+                print(f"ℹ️  No real files found, but bootstrap files detected and allowed via --allow_bootstrap.")
 
         if args.doctor_real_data:
             from src.real_data_loader import ingest_real_data, COLUMN_ALIASES, REQUIRED_CORE
@@ -876,7 +952,7 @@ def main():
         if args.ingest_real:
             from src.real_data_loader import ingest_real_data
             try:
-                report = ingest_real_data()
+                report = ingest_real_data(allow_bootstrap=args.allow_bootstrap)
                 
                 # Hard fail on zero valid records
                 if report['valid_records'] == 0:
@@ -895,7 +971,7 @@ def main():
                     sys.exit(1)
                 
                 print(f"✅ Real data ingest complete: {report['valid_records']} valid records")
-                print(f"   Mode: {report['data_mode']}")
+                print(f"   Mode: {report['data_mode']}, Reason: {report.get('reason_code', 'success')}")
                 if report['rejected_records'] > 0:
                     print(f"⚠️  Warning: {report['rejected_records']} records rejected")
                 sys.exit(0)
@@ -926,11 +1002,16 @@ def main():
                     print(f"❌ ERROR: Dataset not found. Run --build_dataset or --ingest_real first.")
                     sys.exit(1)
                 
-                # Check minimum samples
+                # Check minimum samples and bootstrap presence
                 import csv as csv_module
+                row_count = 0
+                has_bootstrap_rows = False
                 with open(dataset_path, "r", encoding="utf-8-sig") as f:
                     reader = csv_module.DictReader(f)
-                    row_count = sum(1 for _ in reader)
+                    for row in reader:
+                        row_count += 1
+                        if row.get("is_bootstrap") == "1":
+                            has_bootstrap_rows = True
                 
                 min_samples = {"dev": 50, "train": 500, "freeze": 500}.get(args.train_profile, 50)
                 if row_count < min_samples:
@@ -938,6 +1019,53 @@ def main():
                     print(f"   Need {min_samples}, found {row_count}")
                     sys.exit(1)
                 
+                if args.train_profile in ["train", "freeze"]:
+                    from src.real_data_loader import validate_real_data
+                    print("🛡️ Running production preflight checks...")
+                    v_report = validate_real_data()
+                    
+                    preflight_blockers = []
+                    if v_report.get("total_valid_rows", 0) < 500:
+                        preflight_blockers.append({"id": "insufficient_real_rows", "severity": "critical", "message": f"Need 500 valid real rows, found {v_report.get('total_valid_rows')}"})
+                    
+                    if has_bootstrap_rows:
+                        preflight_blockers.append({"id": "bootstrap_rows_in_test_set", "severity": "critical", "message": "Bootstrap rows detected in production dataset"})
+
+                    balance = v_report.get("class_balance", {}).get("min_rate", 0)
+                    if balance < 0.15:
+                        preflight_blockers.append({"id": "imbalanced_real_data", "severity": "critical", "message": f"Class balance {balance:.4f} < 0.15"})
+                        
+                    ts_rate = v_report.get("ts_parse_success_rate", 0)
+                    if ts_rate < 0.99:
+                        preflight_blockers.append({"id": "corrupt_timestamps", "severity": "critical", "message": f"Timestamp parse rate {ts_rate:.2%} < 99%"})
+                    
+                    # Check ingest report for data_mode
+                    ingest_report_path = "outputs/audits/real_data_ingest_report.json"
+                    current_mode = "unknown"
+                    if os.path.exists(ingest_report_path):
+                        try:
+                            with open(ingest_report_path, "r") as f:
+                                r_data = json.load(f)
+                                if isinstance(r_data, dict):
+                                    current_mode = r_data.get("data_mode", "unknown")
+                        except:
+                            pass
+                    
+                    if current_mode != "real":
+                        preflight_blockers.append({"id": "production_requires_real_data", "severity": "critical", "message": f"Data mode is {current_mode}, expected real"})
+
+                    if preflight_blockers:
+                        print("❌ PREFLIGHT FAILED:")
+                        for b in preflight_blockers:
+                            if isinstance(b, dict):
+                                print(f"  [{b.get('severity', 'info')}] {b.get('id', 'unknown')}: {b.get('message', '')}")
+                        
+                        os.makedirs("outputs/audits", exist_ok=True)
+                        with open("outputs/audits/train_blockers.json", "w") as f:
+                            json.dump(preflight_blockers, f, indent=2)
+                        sys.exit(1)
+                    print("✅ Preflight checks passed.")
+
                 print(f"🚀 Training model using {dataset_path}...")
                 train_data, val_data, test_data = temporal_split(dataset_path)
                 metadata = train_model(train_data, val_data, output_dir=args.model_dir)

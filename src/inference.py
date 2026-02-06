@@ -13,7 +13,8 @@ from src.feature_join import join_odds_with_context
 def score_odds_file(
     input_path: str,
     output_dir: str = "outputs/recommendations",
-    join_tolerance_minutes: int = 180
+    join_tolerance_minutes: int = 180,
+    model_readiness: str = "RESEARCH_ONLY"
 ) -> Dict[str, Any]:
     """
     Score odds file and generate recommendations.
@@ -95,7 +96,7 @@ def score_odds_file(
     # Write outputs
     _write_recommendations_json(recommendations, output_dir)
     _write_recommendations_csv(recommendations, output_dir)
-    summary = _write_summary(recommendations, join_result["audit"], output_dir)
+    summary = _write_summary(recommendations, join_result["audit"], output_dir, model_readiness=model_readiness)
     
     return summary
 
@@ -210,7 +211,7 @@ def _write_recommendations_csv(recs: List[Dict[str, Any]], output_dir: str):
         writer.writeheader()
         writer.writerows(csv_recs)
 
-def _write_summary(recs: List[Dict[str, Any]], join_audit: Dict[str, Any], output_dir: str) -> Dict[str, Any]:
+def _write_summary(recs: List[Dict[str, Any]], join_audit: Dict[str, Any], output_dir: str, model_readiness: str = "RESEARCH_ONLY") -> Dict[str, Any]:
     """Write summary statistics."""
     total = len(recs)
     pass_count = sum(1 for r in recs if r["recommendation"] == "PASS")
@@ -219,6 +220,7 @@ def _write_summary(recs: List[Dict[str, Any]], join_audit: Dict[str, Any], outpu
     
     summary = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "model_readiness": model_readiness,
         "total_opportunities": total,
         "join_audit": join_audit,
         "recommendations": {
