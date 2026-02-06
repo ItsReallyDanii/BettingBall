@@ -1,0 +1,50 @@
+# Safety Hardening Config - BettingBall V1
+# This file is authoritative documentation. Runtime constants live in src/safety.py.
+
+generalization_policy:
+  min_games_required: 1000
+  min_teams_covered: 20
+  min_days_span: 60
+  status_if_below_threshold: prototype_only
+  allowed_claims_when_prototype_only:
+    - in-sample behavior only
+    - limited out-of-sample signal
+  forbidden_claims_when_prototype_only:
+    - production-ready edge
+    - stable market alpha
+
+grade_map:
+  A_min: 0.70
+  B_min: 0.60
+  C_min: 0.55
+  D_min: 0.50
+
+risk_map:
+  low:
+    - boxscore
+    - closing_odds
+    - rest_days
+    - home_away
+  medium:
+    - pace_proxy
+    - matchup_derived
+  high:
+    - sentiment
+    - news
+    - manual_narrative
+    - unstable_proxy
+
+leakage_checks_required:
+  - no_future_rows_in_features
+  - train_test_split_time_based
+  - no_target_leak_columns
+  - scaler_fit_on_train_only
+  - calibration_fit_on_validation_only
+  - report_separate_train_valid_test
+
+target_leak_columns:
+  - final_score
+  - postgame_stats
+  - settled_odds
+
+fail_behavior: block_release_claims
