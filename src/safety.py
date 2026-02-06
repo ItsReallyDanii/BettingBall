@@ -40,8 +40,17 @@ GRADE_MAP = {
 }
 
 RISK_MAP: Dict[str, List[str]] = {
-    "low": ["boxscore", "closing_odds", "rest_days", "home_away"],
-    "medium": ["pace_proxy", "matchup_derived"],
+    "low": [
+        "boxscore", "closing_odds", "rest_days", "home_away",
+        # v3 feature families (verified data sources)
+        "home_away_form_delta", "pace_delta",
+        "usage_trend_5g", "minutes_trend_5g", "shooting_eff_trend_5g",
+    ],
+    "medium": [
+        "pace_proxy", "matchup_derived",
+        # v3 feature families (derived / partially verified)
+        "injury_impact_score", "matchup_edge_score",
+    ],
     "high": ["sentiment", "news", "manual_narrative", "unstable_proxy"],
 }
 

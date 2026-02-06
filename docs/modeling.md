@@ -27,11 +27,34 @@ Every factor in prediction output must carry a risk tag from `configs/safety.yam
 
 | Risk Level | Factors |
 |------------|---------|
-| **low** | boxscore, closing_odds, rest_days, home_away |
-| **medium** | pace_proxy, matchup_derived |
+| **low** | boxscore, closing_odds, rest_days, home_away, home_away_form_delta, pace_delta, usage_trend_5g, minutes_trend_5g, shooting_eff_trend_5g |
+| **medium** | pace_proxy, matchup_derived, injury_impact_score, matchup_edge_score |
 | **high** | sentiment, news, manual_narrative, unstable_proxy |
 
 Unknown factors default to **medium**.
+
+## V3 Feature Families (src/features_v3.py)
+
+Six new feature families extend the v2 baseline. Each function is deterministic, NaN-safe, and uses past-only windows.
+
+| Feature | Formula / Window | Default (missing) | Risk |
+|---------|-----------------|-------------------|------|
+| `injury_impact_score` | `0.5*injury_weight + 0.3*(mins_lost/48) + 0.2*cap_penalty`, clipped [0,1] | 0.0 (healthy assumed) | medium (high if source missing) |
+| `home_away_form_delta` | `(home_win%_10 - away_win%_10)`, sign-flipped for away | 0.0 (neutral) | low |
+| `pace_delta` | `team_pace - opp_pace`, clipped [-30,30] | 0.0 (league avg 100) | low |
+| `matchup_edge_score` | `0.4*h2h_norm + 0.3*def_idx_norm + 0.3*def_adv`, clipped [-1,1] | 0.0 (neutral) | medium |
+| `usage_trend_5g` | OLS slope of last 5 game usage rates (oldest-first) | 0.0 (flat) | low |
+| `minutes_trend_5g` | OLS slope of last 5 game minutes | 0.0 (flat) | low |
+| `shooting_eff_trend_5g` | OLS slope of last 5 game eFG% (or TS% fallback) | 0.0 (flat) | low |
+
+### Missing-Data Handling
+- Each function returns `(value, quality_flag)` where quality is `ok`, `missing`, `partial`, or `assumed`.
+- `DataQualityTracker` collects stable `missing_data_flags` keys and deterministic `assumptions` strings.
+- These propagate into `build_prediction_output` for every prediction.
+
+### Leakage Safety
+- All trend features use `_ols_slope()` on oldest-first arrays, using only past data.
+- No future game data is accessed; window is strictly the last N completed games.
 
 ## Confidence Grading
 Deterministic mapping from calibrated confidence to letter grade:

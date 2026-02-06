@@ -24,6 +24,24 @@ class DataConnector:
             "games": ["game_id", "date_utc", "home_team_id", "away_team_id", "is_home_for_subject_team", "days_rest_team", "days_rest_opponent", "head_to_head_last_3", "defender_matchup_index", "ref_crew_foul_tendency", "travel_fatigue_index", "market_open_line", "market_current_line", "line_move_abs"],
             "targets": ["game_id", "player_id", "event_type", "threshold", "horizon", "actual"]
         }
+        # Optional columns for v3 feature families (no hard-fail if absent)
+        self.optional_schemas = {
+            "players": [
+                "injury_minutes_lost",         # injuries family
+                "usage_rates_last_5",          # usage trend (comma-separated per-game)
+                "minutes_list_last_5",         # minutes trend (comma-separated per-game)
+                "efg_last_5",                  # shooting efficiency scalar
+                "efg_list_last_5",             # shooting efficiency per-game
+            ],
+            "teams": [
+                "home_wins_last_10",           # home/away splits
+                "away_wins_last_10",           # home/away splits
+            ],
+            "games": [
+                "possessions_proxy",           # pace proxy input
+                "pace_proxy",                  # alternate pace proxy
+            ],
+        }
 
     def _validate_row(self, schema_key, row):
         expected = self.schemas[schema_key]
