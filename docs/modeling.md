@@ -21,3 +21,22 @@ For every training run, the system evaluates three calibration paths:
 - **Primary Metric**: Validation Brier Score (minimize).
 - **Tie-breaker**: Expected Calibration Error (ECE) (minimize).
 - Only the best-performing calibrator is saved as `outputs/models/calibrator.pkl`.
+
+## Risk Classification (V1 Safety)
+Every factor in prediction output must carry a risk tag from `configs/safety.yaml`:
+
+| Risk Level | Factors |
+|------------|---------|
+| **low** | boxscore, closing_odds, rest_days, home_away |
+| **medium** | pace_proxy, matchup_derived |
+| **high** | sentiment, news, manual_narrative, unstable_proxy |
+
+Unknown factors default to **medium**.
+
+## Confidence Grading
+Deterministic mapping from calibrated confidence to letter grade:
+- **A**: >= 0.70
+- **B**: >= 0.60
+- **C**: >= 0.55
+- **D**: >= 0.50
+- **F**: < 0.50

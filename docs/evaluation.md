@@ -79,3 +79,28 @@ Each evaluation records:
 - File hashes (MD5)
 - Timestamp (UTC)
 - Command-line arguments
+
+## Leakage Gate (V1 Safety)
+
+Six checks enforced before any release claim is permitted:
+
+| Check | Description |
+|-------|-------------|
+| no_future_rows_in_features | No train row timestamps after earliest test row |
+| train_test_split_time_based | max(train_ts) <= min(test_ts) |
+| no_target_leak_columns | final_score, postgame_stats, settled_odds excluded from features |
+| scaler_fit_on_train_only | Scaler never sees validation/test data |
+| calibration_fit_on_validation_only | Calibrator fitted on validation split only |
+| report_separate_train_valid_test | Metrics reported per split, not aggregated |
+
+If **any** check fails: `release_status = blocked_leakage_risk`.
+
+## Generalization Gate (V1 Safety)
+
+| Threshold | Minimum |
+|-----------|---------|
+| Games | 1000 |
+| Teams covered | 20 |
+| Day span | 60 |
+
+Below any threshold: `status = prototype_only`. Forbidden claims suppressed automatically.

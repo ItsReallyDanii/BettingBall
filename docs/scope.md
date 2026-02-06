@@ -20,3 +20,10 @@ BettingBall is designed as a local-first predictive engine. All data ingestion, 
 - **Status: Production Ready**:
     - Requires all Generalization Policy thresholds to be met.
     - Claims allowed: "stable market alpha", "production-ready edge".
+
+## Safety Hardening (V1)
+- Generalization gate enforces prototype_only when thresholds are not met.
+- Leakage gate blocks release claims if any check fails.
+- All prediction outputs follow the structured contract in `src/safety.py`.
+- Risk tagging is mandatory on every factor; see `configs/safety.yaml`.
+- Missing data produces explicit flags and documented assumptions.
